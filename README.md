@@ -22,7 +22,7 @@ Role Variables
 
 ```yaml
 ---
-ovirt_engine_db_dump_local_dir: directory on local machine where to store files (default: in playbook directory)
+
 ```
 
 Dependencies
