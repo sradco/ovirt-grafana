@@ -1,0 +1,16 @@
+---
+galaxy_info:
+  author: Shirly Radco
+  description: An Ansible role for installing Grafana for oVirt DWH
+  company: Ansible
+  license: MIT
+  min_ansible_version: 2.7
+  platforms:
+    - name: EL
+      versions:
+      - 7
+      - 8
+  categories:
+    - monitoring
+    - system
+dependencies: []

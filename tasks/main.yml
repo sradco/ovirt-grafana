@@ -1,0 +1,99 @@
+---
+- name: Install Grafana
+  yum:
+    name: "{{ grafana_packages }}"
+    state: installed
+  tags: package
+
+- name: Configure Grafana
+  template:
+    src: grafana.ini.j2
+    dest: /etc/grafana/grafana.ini
+  notify: restart grafana
+
+- name: Install Grafana service
+  service:
+    name: grafana-server
+    state: started
+    enabled: yes
+
+- name: Wait for Grafana port
+  wait_for:
+    port: "{{ grafana_port }}"
+
+- name: Read DWH config file
+  slurp:
+    src: "{{ ovirt_engine_etc_conf_path }}/10-setup-dwh-database.conf"
+  register: file_content
+
+- name: Matching related DB configs
+  set_fact:
+   decoded_content: "{{ ((file_content['content'] | b64decode).split('\n') | select('match', 'DWH_DB*') | list) }}"
+
+- debug:
+    msg: "{{ decoded_content }}"
+
+- name: Set facts for dwh variables
+  set_fact:
+    ovirt_engine_dwh_db: >
+      {{
+        ovirt_engine_dwh_db | default({}) |
+        combine(
+          dict([ [item.partition('=')[0], item.partition('=')[2] | regex_replace('\"', '')] ])
+        )
+      }}
+  with_items: "{{ decoded_content }}"
+
+- debug:
+    msg: "{{ ovirt_engine_dwh_db }}"
+
+- name: Create local dir
+  local_action:
+    file path={{ ovirt_grafana_local_dir }} state=directory
+
+- name: Print DWH variables to file
+  local_action:
+        copy content="{{ ovirt_engine_dwh_db | to_nice_yaml }}" dest="{{ ovirt_grafana_local_dir }}/dwh_variables.yml"
+
+- name: Get DWH variables from file
+  include_vars:
+    file: "{{ ovirt_grafana_local_dir }}/dwh_variables.yml"
+    name: ovirt_engine_dwh_db
+
+- name: Set facts for dwh variables
+  set_fact:
+    ovirt_engine_dwh_db_name: "{{ ovirt_engine_dwh_db['DWH_DB_DATABASE'] }}"
+    ovirt_engine_dwh_db_user: "{{ ovirt_engine_dwh_db['DWH_DB_USER'] }}"
+    ovirt_engine_dwh_db_password: "{{ ovirt_engine_dwh_db['DWH_DB_PASSWORD'] }}"
+    ovirt_engine_dwh_db_host: "{{ ovirt_engine_dwh_db['DWH_DB_HOST'] }}"
+    ovirt_engine_dwh_db_port: "{{ ovirt_engine_dwh_db['DWH_DB_PORT'] }}"
+
+- name: Generate datasourcees.yml templates
+  template:
+    src: '{{ role_path }}/templates/datasources.template'
+    dest: '{{ role_path }}/datasources.yml'
+    mode: 0644
+
+- name: Copy datasources.yml to Grafana
+  copy:
+    src: '{{ role_path }}/datasources.yml'
+    dest: /usr/share/grafana/conf/provisioning/datasources/ovirt-dwh.yaml
+  notify: restart grafana
+
+- name: Get datasources
+  uri:
+    headers:
+      Content-Type: application/json
+    url: http://localhost:{{ grafana_port }}/api/datasources
+    method: GET
+    user: admin
+    password: "{{ grafana_admin_password }}"
+    force_basic_auth: yes
+  tags: datasource
+  register: datasources
+  when: grafana_data_source is defined
+
+- name: Set datasource fact
+  set_fact:
+    grafana_datasources: "{{ datasources.json | default([]) | map(attribute='name') | list }}"
+  tags: datasource

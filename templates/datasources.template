@@ -1,0 +1,16 @@
+---
+apiVersion: 1
+
+datasources:
+- name: oVirt DWH
+  type: postgres
+  access: proxy
+  orgId: 1
+  url: {{ ovirt_engine_dwh_db_host }}:{{ ovirt_engine_dwh_db_port }}
+  editable: true
+  isDefault: true
+  password: {{ ovirt_engine_dwh_db_password }}
+  user: {{ ovirt_engine_dwh_db_user }}
+  database: {{ ovirt_engine_dwh_db_name }}
+  jsonData:
+    sslmode: disable
