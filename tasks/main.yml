@@ -123,12 +123,7 @@
 - name: Generate datasources.yml templates
   template:
     src: '{{ role_path }}/templates/datasources.template'
-    dest: '{{ role_path }}/datasources.yml'
+    dest: '{{ grafana_conf_provisioning_path }}/datasources/ovirt-dwh.yaml'
     mode: 0644
-
-- name: Copy datasources.yml to Grafana
-  copy:
-    src: '{{ role_path }}/datasources.yml'
-    dest: /usr/share/grafana/conf/provisioning/datasources/ovirt-dwh.yaml
   notify: restart grafana
 
