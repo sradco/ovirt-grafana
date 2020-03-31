@@ -9,6 +9,7 @@ grafana_admin_password: "password"
 grafana_secret_key: "18Z98oGhk95Oo72OmuG484eBP4g2774c"
 grafana_session_provider: "memory"
 grafana_sessions_provider_config: ""
+grafana_custom_dashboard: true
 
-ovirt_engine_etc_conf_path: "/etc/ovirt-engine/engine.conf.d/"
-ovirt_grafana_local_dir: "{{ playbook_dir }}/dwh_variables"
+ovirt_grafana_read_only_user_name: ovirt-grafana
+ovirt_engine_dwh_etc_conf_path: "/etc/ovirt-engine-dwh/ovirt-engine-dwhd.conf.d/"

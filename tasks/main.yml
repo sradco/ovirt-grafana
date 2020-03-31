@@ -21,17 +21,25 @@
   wait_for:
     port: "{{ grafana_port }}"
 
+- name: Copy the oVirt Engine CA to Grafana machine
+  copy:
+    src: "/etc/pki/ovirt-engine/ca.pem"
+    dest: "/etc/pki/ca-trust/source/anchors/"
+
+- name: Add the certificate to system-wide trusted certificates
+  command: update-ca-trust
+
 - name: Read DWH config file
   slurp:
-    src: "{{ ovirt_engine_etc_conf_path }}/10-setup-dwh-database.conf"
+    src: "{{ ovirt_engine_dwh_etc_conf_path }}/10-setup-database.conf"
   register: file_content
 
-- name: Matching related DB configs
+- name: Matching related DWH DB configs
   set_fact:
-   decoded_content: "{{ ((file_content['content'] | b64decode).split('\n') | select('match', 'DWH_DB*') | list) }}"
+   ovirt_engine_dwh_decoded_content: "{{ ((file_content['content'] | b64decode).split('\n') | select('match', 'DWH_DB*') | list) }}"
 
 - debug:
-    msg: "{{ decoded_content }}"
+    msg: "{{ ovirt_engine_dwh_decoded_content }}"
 
 - name: Set facts for dwh variables
   set_fact:
@@ -42,33 +50,77 @@
           dict([ [item.partition('=')[0], item.partition('=')[2] | regex_replace('\"', '')] ])
         )
       }}
-  with_items: "{{ decoded_content }}"
+  with_items: "{{ ovirt_engine_dwh_decoded_content }}"
+
+- name: Matching related engine DB configs
+  set_fact:
+   ovirt_engine_decoded_content: "{{ ((file_content['content'] | b64decode).split('\n') | select('match', 'ENGINE_DB*') | list) }}"
 
 - debug:
-    msg: "{{ ovirt_engine_dwh_db }}"
-
-- name: Create local dir
-  local_action:
-    file path={{ ovirt_grafana_local_dir }} state=directory
-
-- name: Print DWH variables to file
-  local_action:
-        copy content="{{ ovirt_engine_dwh_db | to_nice_yaml }}" dest="{{ ovirt_grafana_local_dir }}/dwh_variables.yml"
-
-- name: Get DWH variables from file
-  include_vars:
-    file: "{{ ovirt_grafana_local_dir }}/dwh_variables.yml"
-    name: ovirt_engine_dwh_db
+    msg: "{{ ovirt_engine_decoded_content }}"
 
 - name: Set facts for dwh variables
+  set_fact:
+    ovirt_engine_db: >
+      {{
+        ovirt_engine_dwh_db | default({}) |
+        combine(
+          dict([ [item.partition('=')[0], item.partition('=')[2] | regex_replace('\"', '')] ])
+        )
+      }}
+  with_items: "{{ ovirt_engine_decoded_content }}"
+
+- debug:
+    msg: "{{ ovirt_engine_db }}"
+
+- name: Set facts for engine and dwh db variables
   set_fact:
     ovirt_engine_dwh_db_name: "{{ ovirt_engine_dwh_db['DWH_DB_DATABASE'] }}"
     ovirt_engine_dwh_db_user: "{{ ovirt_engine_dwh_db['DWH_DB_USER'] }}"
     ovirt_engine_dwh_db_password: "{{ ovirt_engine_dwh_db['DWH_DB_PASSWORD'] }}"
     ovirt_engine_dwh_db_host: "{{ ovirt_engine_dwh_db['DWH_DB_HOST'] }}"
     ovirt_engine_dwh_db_port: "{{ ovirt_engine_dwh_db['DWH_DB_PORT'] }}"
+    ovirt_engine_db_name: "{{ ovirt_engine_db['ENGINE_DB_DATABASE'] }}"
+    ovirt_engine_db_user: "{{ ovirt_engine_db['ENGINE_DB_USER'] }}"
+    ovirt_engine_db_password: "{{ ovirt_engine_db['ENGINE_DB_PASSWORD'] }}"
+    ovirt_engine_db_host: "{{ ovirt_engine_db['ENGINE_DB_HOST'] }}"
+    ovirt_engine_db_port: "{{ ovirt_engine_db['ENGINE_DB_PORT'] }}"
 
-- name: Generate datasourcees.yml templates
+- name: Generate password for ovirt-grafana user
+  set_fact:
+    ovirt_grafana_read_only_user_pass: "{{ lookup('password', '/dev/null length=22 chars=ascii_letters') }}"
+
+- name: Grant ovirt-grafana user access to the DWH database using md5 authentication.
+  postgresql_pg_hba:
+    dest: "{{ ovirt_engine_postgres_pg_hba_path|d('/var/lib/pgsql/data/pg_hba.conf') }}"
+    contype: host
+    users: "{{ ovirt_grafana_read_only_user_name|d('ovirt_grafana') }}"
+    source: "{{ item }}"
+    databases: "{{ ovirt_engine_dwh_db_name }}"
+  with_items:
+    - ::0/0
+    - 0.0.0.0/0
+
+- name: Connect to history db, create Grafana read only user, and grant access to the database
+  become: true
+  become_user: postgres
+  postgresql_user:
+    db: "{{ ovirt_engine_dwh_db_name }}"
+    name: "{{ ovirt_grafana_read_only_user_name|d('ovirt_grafana') }}"
+    password: "{{ ovirt_grafana_read_only_user_pass }}"
+    priv: "CONNECT"
+
+- name: Grant SELECT privileges to the Grafana Read Only user
+  become: true
+  become_user: postgres
+  postgresql_privs:
+    db: "{{ ovirt_engine_dwh_db_name }}"
+    privs: SELECT
+    schema: public
+    objs: ALL_IN_SCHEMA
+    roles: "{{ ovirt_grafana_read_only_user_name|d('ovirt_grafana') }}"
+
+- name: Generate datasources.yml templates
   template:
     src: '{{ role_path }}/templates/datasources.template'
     dest: '{{ role_path }}/datasources.yml'
@@ -80,20 +132,3 @@
     dest: /usr/share/grafana/conf/provisioning/datasources/ovirt-dwh.yaml
   notify: restart grafana
 
-- name: Get datasources
-  uri:
-    headers:
-      Content-Type: application/json
-    url: http://localhost:{{ grafana_port }}/api/datasources
-    method: GET
-    user: admin
-    password: "{{ grafana_admin_password }}"
-    force_basic_auth: yes
-  tags: datasource
-  register: datasources
-  when: grafana_data_source is defined
-
-- name: Set datasource fact
-  set_fact:
-    grafana_datasources: "{{ datasources.json | default([]) | map(attribute='name') | list }}"
-  tags: datasource
