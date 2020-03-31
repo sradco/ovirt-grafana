@@ -1,0 +1,2 @@
+---
+ovirt_grafana_user_password: {{ ovirt_grafana_user_password }}

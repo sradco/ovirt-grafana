@@ -31,7 +31,7 @@
 
 - name: Read DWH config file
   slurp:
-    src: "{{ ovirt_engine_dwh_etc_conf_path }}/10-setup-database.conf"
+    src: "{{ ovirt_engine_dwh_etc_conf_dir_path }}/10-setup-database.conf"
   register: file_content
 
 - name: Matching related DWH DB configs
@@ -86,15 +86,30 @@
     ovirt_engine_db_host: "{{ ovirt_engine_db['ENGINE_DB_HOST'] }}"
     ovirt_engine_db_port: "{{ ovirt_engine_db['ENGINE_DB_PORT'] }}"
 
+- name: Check if ovirt-grafana user credentials file already exists
+  stat:
+    path: "{{ ovirt_grafana_user_password_file_path }}"
+  register: ovirt_grafana_user_password_stat_result
+
 - name: Generate password for ovirt-grafana user
   set_fact:
-    ovirt_grafana_read_only_user_pass: "{{ lookup('password', '/dev/null length=22 chars=ascii_letters') }}"
+    ovirt_grafana_user_password: "{{ lookup('password', '/dev/null length=22 chars=ascii_letters') }}"
+  when: stat_result.stat.exists == False
+
+- name: Save ovirt-grafana user password fo file
+  template:
+    src: "{{ role_path }}/templates/ovirt-grafana-user.template
+    dest: "{{ ovirt_grafana_user_password_file_path }}"
+    owner: ovirt
+    group: root
+    mode: '0644'
+  when: ovirt_grafana_user_password_stat_result.stat.exists == False
 
 - name: Grant ovirt-grafana user access to the DWH database using md5 authentication.
   postgresql_pg_hba:
-    dest: "{{ ovirt_engine_postgres_pg_hba_path|d('/var/lib/pgsql/data/pg_hba.conf') }}"
+    dest: "{{ ovirt_engine_postgres_pg_hba_file_path|d('/var/lib/pgsql/data/pg_hba.conf') }}"
     contype: host
-    users: "{{ ovirt_grafana_read_only_user_name|d('ovirt_grafana') }}"
+    users: "{{ ovirt_grafana_user_name }}"
     source: "{{ item }}"
     databases: "{{ ovirt_engine_dwh_db_name }}"
   with_items:
@@ -106,8 +121,8 @@
   become_user: postgres
   postgresql_user:
     db: "{{ ovirt_engine_dwh_db_name }}"
-    name: "{{ ovirt_grafana_read_only_user_name|d('ovirt_grafana') }}"
-    password: "{{ ovirt_grafana_read_only_user_pass }}"
+    name: "{{ ovirt_grafana_user_name }}"
+    password: "{{ ovirt_grafana_user_password }}"
     priv: "CONNECT"
 
 - name: Grant SELECT privileges to the Grafana Read Only user
@@ -118,12 +133,11 @@
     privs: SELECT
     schema: public
     objs: ALL_IN_SCHEMA
-    roles: "{{ ovirt_grafana_read_only_user_name|d('ovirt_grafana') }}"
+    roles: "{{ ovirt_grafana_user_name }}"
 
 - name: Generate datasources.yml templates
   template:
     src: '{{ role_path }}/templates/datasources.template'
-    dest: '{{ grafana_conf_provisioning_path }}/datasources/ovirt-dwh.yaml'
+    dest: '{{ grafana_conf_provisioning_dir_path }}/datasources/ovirt-dwh.yaml'
     mode: 0644
   notify: restart grafana
-

@@ -10,7 +10,8 @@ grafana_secret_key: "18Z98oGhk95Oo72OmuG484eBP4g2774c"
 grafana_session_provider: "memory"
 grafana_sessions_provider_config: ""
 grafana_custom_dashboard: true
-grafana_conf_provisioning_path: "/usr/share/grafana/conf/provisioning"
+grafana_conf_provisioning_dir_path: "/usr/share/grafana/conf/provisioning"
 
-ovirt_grafana_read_only_user_name: ovirt-grafana
-ovirt_engine_dwh_etc_conf_path: "/etc/ovirt-engine-dwh/ovirt-engine-dwhd.conf.d/"
+ovirt_grafana_user_name: ovirt-grafana
+ovirt_engine_dwh_etc_conf_dir_path: "/etc/ovirt-engine-dwh/ovirt-engine-dwhd.conf.d/"
+ovirt_grafana_user_password_file_path: /tmp/10-setup-ovirt-grafana.conf
