@@ -14,4 +14,11 @@ grafana_conf_provisioning_dir_path: "/usr/share/grafana/conf/provisioning"
 
 ovirt_grafana_user_name: ovirt-grafana
 ovirt_engine_dwh_etc_conf_dir_path: "/etc/ovirt-engine-dwh/ovirt-engine-dwhd.conf.d/"
-ovirt_grafana_user_password_file_path: /tmp/10-setup-ovirt-grafana.conf
+ovirt_grafana_user_password_file_path: /etc/grafana/ovirt-grafana-user.conf
+
+# Google Auth
+grafana_auth_google: false
+grafana_auth_google_allow_sign_up: "false"
+grafana_auth_google_client_id: "some_client_id"
+grafana_auth_google_client_secret: "some_client_secret"
+grafana_auth_google_allowed_domains: "petalmd.com"

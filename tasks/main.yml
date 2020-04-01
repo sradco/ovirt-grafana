@@ -36,12 +36,13 @@
 
 - name: Matching related DWH DB configs
   set_fact:
-   ovirt_engine_dwh_decoded_content: "{{ ((file_content['content'] | b64decode).split('\n') | select('match', 'DWH_DB*') | list) }}"
+    ovirt_engine_dwh_decoded_content: "{{ ((file_content['content'] | b64decode).split('\n') | select('match', 'DWH_DB*') | list) }}"
+    ovirt_engine_decoded_content: "{{ ((file_content['content'] | b64decode).split('\n') | select('match', 'ENGINE_DB*') | list) }}"
 
 - debug:
     msg: "{{ ovirt_engine_dwh_decoded_content }}"
 
-- name: Set facts for dwh variables
+- name: Set facts for dwh db variables
   set_fact:
     ovirt_engine_dwh_db: >
       {{
@@ -52,18 +53,14 @@
       }}
   with_items: "{{ ovirt_engine_dwh_decoded_content }}"
 
-- name: Matching related engine DB configs
-  set_fact:
-   ovirt_engine_decoded_content: "{{ ((file_content['content'] | b64decode).split('\n') | select('match', 'ENGINE_DB*') | list) }}"
-
 - debug:
     msg: "{{ ovirt_engine_decoded_content }}"
 
-- name: Set facts for dwh variables
+- name: Set facts for engine db variables
   set_fact:
     ovirt_engine_db: >
       {{
-        ovirt_engine_dwh_db | default({}) |
+        ovirt_engine_db | default({}) |
         combine(
           dict([ [item.partition('=')[0], item.partition('=')[2] | regex_replace('\"', '')] ])
         )
@@ -91,18 +88,23 @@
     path: "{{ ovirt_grafana_user_password_file_path }}"
   register: ovirt_grafana_user_password_stat_result
 
+- name: Include ovirt-grafana user password
+  include_vars:
+    file: "{{ ovirt_grafana_user_password_file_path }}"
+  when:  ovirt_grafana_user_password_stat_result.stat.exists
+
 - name: Generate password for ovirt-grafana user
   set_fact:
     ovirt_grafana_user_password: "{{ lookup('password', '/dev/null length=22 chars=ascii_letters') }}"
-  when: stat_result.stat.exists == False
+  when: ovirt_grafana_user_password_stat_result.stat.exists == False
 
 - name: Save ovirt-grafana user password fo file
   template:
-    src: "{{ role_path }}/templates/ovirt-grafana-user.template
+    src: "{{ role_path }}/templates/ovirt-grafana-user.template"
     dest: "{{ ovirt_grafana_user_password_file_path }}"
-    owner: ovirt
+    owner: grafana
     group: root
-    mode: '0644'
+    mode: '0640'
   when: ovirt_grafana_user_password_stat_result.stat.exists == False
 
 - name: Grant ovirt-grafana user access to the DWH database using md5 authentication.
