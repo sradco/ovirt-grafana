@@ -31,7 +31,7 @@
 
 - name: Read DWH config file
   slurp:
-    src: "{{ ovirt_engine_dwh_etc_conf_dir_path }}/10-setup-database.conf"
+    src: "{{ ovirt_engine_dwh_etc_conf_file_path }}"
   register: file_content
 
 - name: Matching related DWH DB configs

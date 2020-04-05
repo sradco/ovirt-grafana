@@ -105,22 +105,28 @@ path = grafana.db
 
 # For "sqlite3" only. cache mode setting used for connecting to the database
 cache_mode = private
-#################################### Session ####################################
-[session]
-# Either "memory", "file", "redis", "mysql", "postgres", default is "file"
-provider = {{ grafana_session_provider }}
+#################################### Remote Cache ####################################
+[remote_cache]
 
-# Provider config options
-# memory: not have any config yet
-# file: session dir path, is relative to grafana data_path
-# redis: config like redis server e.g. `addr=127.0.0.1:6379,pool_size=100,db=grafana`
-# mysql: go-sql-driver/mysql dsn config string, e.g. `user:password@tcp(127.0.0.1:3306)/database_name`
-# postgres: user=a password=b host=localhost port=5432 dbname=c sslmode=disable
-provider_config = {{ grafana_sessions_provider_config }}
+# Either redis, memcached or database. Defaults to database
+type = database
 
-# Session cookie name
-;cookie_name = grafana_sess
+# The remote cache connection string. The format depends on the type of the remote cache.
+connstr =
 
+# Leave empty when using database since it will use the primary database.
+database =
+
+# Example connstr: addr=127.0.0.1:6379,pool_size=100,db=0,ssl=false
+# addr is the host : port of the redis server.
+# pool_size (optional) is the number of underlying connections that can be made to redis.
+# db (optional) is the number indentifer of the redis database you want to use.
+# ssl (optional) is if SSL should be used to connect to redis server. The value may be true, false, or insecure.
+# Setting the value to insecure skips verification of the certificate chain and hostname when making the connection.
+redis =
+
+# Example connstr: 127.0.0.1:11211
+memcache =
 #################################### Data proxy ###########################
 [dataproxy]
 
@@ -337,11 +343,6 @@ enabled = false
 allow_sign_up = true
 client_id = some_client_id
 client_secret = some_client_secret
-{% if grafana_auth_google %}
-enabled = true
-allow_sign_up = {{ grafana_auth_google_allow_sign_up }}
-client_id = {{ grafana_auth_google_client_id }}
-client_secret = {{ grafana_auth_google_client_secret }}
 scopes = https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email
 auth_url = https://accounts.google.com/o/oauth2/auth
 token_url = https://accounts.google.com/o/oauth2/token
@@ -431,8 +432,7 @@ assertion_attribute_email = mail
 #################################### Basic Auth ##########################
 [auth.basic]
 enabled = true
-allowed_domains = {{ grafana_auth_google_allowed_domains }}
-{% endif %}
+allowed_domains =
 
 #################################### Auth Proxy ##########################
 [auth.proxy]
